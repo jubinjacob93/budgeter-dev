@@ -2,12 +2,19 @@
 
 Tasks for building the app described in `_docs/plan.md`, in build order. Each task is sized for one 2–3 hour session with AI assistance and is self-describing: read its goal, check that the tasks under **Depends on** are done, and see the referenced plan section for background. The milestone (M1–M8) is shown in each title. Tasks marked **optional** can be postponed without blocking anything else.
 
+Tasks here are intentionally short. Before a task is implemented, the PM role grooms it into the full template in `_docs/task-template.md` (goal, acceptance criteria, out of scope, constraints), following `_docs/process.md`.
+
 ---
+
+## 0. Set up the agent workflow (M1) ✅
+Goal: Every coding-agent session starts with the project's rules, process and roles.
+Depends on: none
+Description: Add `AGENTS.md` (commands, rules, links to documents), `CLAUDE.md` pointing to it, `_docs/process.md`, `_docs/task-template.md`, and the three role files in `_docs/team/` (PM, software engineer, QA). Commit them before any code so every later session follows the same workflow.
 
 ## 1. Set up an empty project with a passing test and CI (M1)
 Goal: A clean Python project that installs, lints and passes one test, locally and in GitHub Actions.
-Depends on: none
-Description: Initialize the repository with uv, a `src/` package layout, pytest and Ruff configured in `pyproject.toml`, a `.gitignore` and a README stub, plus one trivial test. Add a GitHub Actions workflow that runs Ruff and pytest on every push and pull request, and add its status badge to the README.
+Depends on: 0
+Description: Initialize the repository with uv, the folder layout from the plan's Repository layout section, pytest and Ruff configured in `pyproject.toml`, a `.gitignore`, a README stub and one trivial test. Add a Makefile with `make test` and `make lint`, plus a GitHub Actions workflow that runs Ruff and pytest on every push and pull request, with its status badge in the README.
 
 ## 2. Run Postgres and a FastAPI skeleton in Docker Compose (M1)
 Goal: `docker compose up` starts Postgres (with pgvector) and a FastAPI app with a health check.
@@ -82,7 +89,7 @@ Description: Identify refunds (positive amounts from a merchant normally charged
 ## 16. Add user authentication (M2)
 Goal: Each household member logs in with their own account.
 Depends on: 4
-Description: Compare 2–3 auth approaches (per the plan's library defaults) and record the choice in the plan. Implement login with hashed passwords for up to two users and protect all API endpoints; test login, failed login and unauthorized access.
+Description: Compare 2–3 auth approaches (default candidate: hashed passwords + bearer tokens, per the plan's library defaults) and record the choice in the plan. Implement login with hashed passwords for up to two users and protect all API endpoints; test login, failed login and unauthorized access.
 
 ## 17. Build the transactions API (M2)
 Goal: The API lists, filters and edits transactions.
@@ -92,7 +99,7 @@ Description: Add endpoints to list transactions with filters (date range, accoun
 ## 18. Show a first screen: a basic transactions page (M2)
 Goal: See real data in a browser early in the build.
 Depends on: 17
-Description: Add a Streamlit container to Docker Compose with a single page that lists transactions from the API, with date and account filters. Authenticate with a development user from environment settings; the full login screen comes in task 43.
+Description: Add a Streamlit container to Docker Compose with a single page that lists transactions from the API, with date and account filters. All backend calls go through `ui/api_client.py`, never directly to the database. Authenticate with a development user from environment settings; the full login screen comes in task 43.
 
 ## 19. Build budgets and planned-vs-actual (M2)
 Goal: The API returns planned, actual and remaining amounts per category per month.
@@ -292,3 +299,8 @@ Description: Schedule nightly Postgres backups to off-server storage with retent
 Goal: The app runs on Railway with public HTTPS and hardened access.
 Depends on: 56
 Description: Follow the migration checklist in the plan's Deployment section: confirm pgvector support, restore the database, recreate services with private networking, harden login and rate limiting, expose the MCP server with authentication, and update Plaid redirect URLs.
+
+## 58. Build a mobile-friendly frontend with Lovable (v2)
+Goal: A polished, phone-first UI that uses the existing backend unchanged.
+Depends on: 43–48
+Description: Generate a React frontend in Lovable from the plan and the FastAPI OpenAPI spec, with every backend call in one services layer. Connect it to the existing API (configure CORS and bearer-token auth), confirm all pages match the Streamlit features, and keep the backend untouched.
