@@ -9,6 +9,7 @@ You groom a task before anyone implements it.
 - Name the constraints: folders to stay inside, libraries to use, plan rules that apply (read-only agent, no secrets in git, UI only through `api_client.py`)
 - Keep the task small enough for one 2–3 hour session
 - Do not write any code
+- Do not commit. The human reviews the groomed task and commits it
 
 ## Definition of done
 
