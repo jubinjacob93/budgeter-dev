@@ -77,6 +77,16 @@ A fresh clone installs with `uv sync`, and `make lint` and `make test` both pass
 - Follow `_docs/plan.md` § 5 (Repository layout, Code conventions, Library defaults: uv, Ruff) and § 9 (Testing and CI).
 - Commit with messages that start with `task 01:` (e.g. `task 01: add pyproject and Makefile`). Do not push; the human pushes and checks the CI run.
 
+## Implementation notes
+
+- Scaffolded from `uv init --package` (uv 0.13.0), keeping its `uv_build` backend. Removed the generated `main()` and `[project.scripts]` entry so every `__init__.py` is empty, and left out the `authors` field.
+- Dev group: `pytest>=8.4`, `ruff>=0.13`. The lock resolves to pytest 9.1.1 and ruff 0.17.1.
+- `make lint` runs `ruff check .` and then `ruff format --check .`. I checked that it exits 2 for an unused import and for a formatting-only error (which `ruff check` alone lets through). `make test` exits 2 when the test is made to fail.
+- CI installs Python with `uv python install 3.13`, which follows `.python-version`. Actions are pinned to `actions/checkout@v5` and `astral-sh/setup-uv@v6`.
+- Verified on a fresh `git clone`: `uv sync --locked`, `make lint`, `make test` and `import budgeter` all succeed, and `git status` stays clean.
+- For the reviewer: Ruff 0.17 also format-checks Python code blocks inside Markdown files (it reports 20 files: 10 `.py`, `pyproject.toml` and the `.md` files in the repo root and `_docs/`). They all pass today. A badly formatted Python snippet in a doc would now fail `make lint`.
+- Not verified: the green CI run on GitHub. The human needs to push first.
+
 ## QA verdict
 
 (QA adds its PASS or FAIL verdict here.)
