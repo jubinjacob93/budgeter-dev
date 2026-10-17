@@ -87,6 +87,60 @@ A fresh clone installs with `uv sync`, and `make lint` and `make test` both pass
 - For the reviewer: Ruff 0.17 also format-checks Python code blocks inside Markdown files (it reports 20 files: 10 `.py`, `pyproject.toml` and the `.md` files in the repo root and `_docs/`). They all pass today. A badly formatted Python snippet in a doc would now fail `make lint`.
 - Not verified: the green CI run on GitHub. The human needs to push first.
 
-## QA verdict
+## QA verdict: PASS
 
-(QA adds its PASS or FAIL verdict here.)
+All checks ran on a fresh `git clone` of `65e94fb` (uv 0.13.0, CPython 3.13.16). Negative checks were made in that clone only and then reverted.
+
+### Project and dependencies
+
+- [x] `pyproject.toml` defines package `budgeter` with the `src/` layout, managed by uv (`uv_build` backend) - PASS
+- [x] `requires-python = ">=3.13"`, and `.python-version` contains `3.13` - PASS
+- [x] `dependencies = []`; the `dev` group holds only `pytest` and `ruff`. `uv tree --no-dev` shows only `budgeter` - PASS
+- [x] `uv.lock` is tracked; `uv sync --locked` exits 0 on the fresh clone - PASS
+- [x] `uv run python -c "import budgeter"` exits 0 and resolves to `src/budgeter/__init__.py` - PASS
+
+### Folder layout
+
+- [x] All 8 packages exist with `__init__.py`; `find src -name __init__.py -size +0` finds none, so all are empty - PASS
+- [x] `scripts/.gitkeep`, `evals/.gitkeep` and `tests/integration/.gitkeep` are tracked - PASS
+- [x] `tests/unit/test_smoke.py` exists - PASS
+- [x] `git ls-files` shows no other source files (no compose, Dockerfiles, `.env.example`, Alembic, FastAPI code) - PASS
+
+### Tooling configuration
+
+- [x] `[tool.ruff]` sets `target-version = "py313"` and `line-length = 100`; `[tool.ruff.lint]` selects `E`, `F`, `I`, `UP`, `B` - PASS
+- [x] `[tool.pytest.ini_options]` sets `testpaths = ["tests"]` - PASS
+- [x] Exactly one test, `test_package_imports`, imports `budgeter` and passes - PASS
+
+### Makefile
+
+- [x] `make test` runs `uv run pytest`, exits 0, reports `1 passed` - PASS
+- [x] `make lint` runs `uv run ruff check .` and `uv run ruff format --check .`, exits 0 - PASS
+- [x] With `import os` added to a new module, `make lint` exits 2. With `x  =  1` (formatting only; `ruff check` alone exits 0), `make lint` exits 2 - PASS
+- [x] With the assertion changed to `== "nope"`, `make test` exits 2 - PASS
+- [x] Recipes are tab-indented (checked with `cat -A`) - PASS
+
+### Git hygiene
+
+- [x] `.gitignore` keeps `.env` and `old versions/` and adds all 8 required entries - PASS
+- [x] After `uv sync`, `make lint` and `make test`, `git status --porcelain` is empty. Generated `.venv/`, caches and `__pycache__/` show only as ignored - PASS
+- [x] No `.env`, CSV, OFX/QFX, PDF or XLSX file in any commit (`git log --all --name-only`). Grepping full history for key/secret/token/password/private-key patterns finds only prose in `_docs/` and `AGENTS.md` - PASS
+
+### CI
+
+- [x] `.github/workflows/ci.yml` triggers on `push` (no branch filter) and `pull_request` - PASS
+- [x] Steps: `actions/checkout@v5`, `astral-sh/setup-uv@v6`, `uv python install 3.13`, `uv sync --locked`, `make lint`, `make test` - PASS
+- [x] `continue-on-error` does not appear anywhere in `.github/` - PASS
+- [x] GitHub run `38998478003` for HEAD `65e94fb` finished `success`, and every step (Lint, Test included) succeeded (`gh run view`) - PASS
+
+### README
+
+- [x] Has the project name, the one-sentence description from the plan, a link to `_docs/plan.md`, and `uv sync`, `make lint`, `make test` - PASS
+- [x] The badge uses the required URL and links to `.../actions/workflows/ci.yml` - PASS
+
+### Notes (not failures)
+
+- The failure cases (lint error, failing test) were only checked locally through `make`. CI runs the same `make` targets without `continue-on-error`, so it should fail the same way, but no failing run was seen on GitHub.
+- I agree with the engineer's note: Ruff 0.17 also format-checks Python code blocks in the repo's Markdown files, so a badly formatted snippet in `_docs/` would fail `make lint` and CI.
+
+Tests: `make test` on a fresh clone, 1 passed, 0 failed. `make lint`: `All checks passed!`, `20 files already formatted`.
