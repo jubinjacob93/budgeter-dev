@@ -11,7 +11,7 @@ Goal: Every coding-agent session starts with the project's rules, process and ro
 Depends on: none
 Description: Add `AGENTS.md` (commands, rules, links to documents), `CLAUDE.md` pointing to it, `_docs/process.md`, `_docs/task-template.md`, and the three role files in `_docs/team/` (PM, software engineer, QA). Commit them before any code so every later session follows the same workflow.
 
-## 1. Set up an empty project with a passing test and CI (M1)
+## 1. Set up an empty project with a passing test and CI (M1) ✅
 Goal: A clean Python project that installs, lints and passes one test, locally and in GitHub Actions.
 Depends on: 0
 Description: Initialize the repository with uv, the folder layout from the plan's Repository layout section, pytest and Ruff configured in `pyproject.toml`, a `.gitignore`, a README stub and one trivial test. Add a Makefile with `make test` and `make lint`, plus a GitHub Actions workflow that runs Ruff and pytest on every push and pull request, with its status badge in the README.
