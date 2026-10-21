@@ -1,4 +1,7 @@
-.PHONY: lint test
+.PHONY: run lint test
+
+run:
+	docker compose up --build
 
 lint:
 	uv run ruff check .

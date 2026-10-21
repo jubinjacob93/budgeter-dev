@@ -7,6 +7,21 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      db:
+        # Same image as docker-compose.yml.
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_USER: budgeter
+          POSTGRES_PASSWORD: ci-throwaway-password
+          POSTGRES_DB: budgeter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U budgeter -d budgeter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
 
@@ -23,3 +38,8 @@ jobs:
 
       - name: Test
         run: make test
+        env:
+          DATABASE_URL: postgresql://budgeter:ci-throwaway-password@localhost:5432/budgeter
+
+      - name: Build API image
+        run: docker build --target api .
