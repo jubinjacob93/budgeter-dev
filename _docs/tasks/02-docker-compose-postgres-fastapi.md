@@ -16,9 +16,10 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 ### Configuration
 
 - [ ] `src/budgeter/core/config.py` defines a settings class that reads `DATABASE_URL` from environment variables only (no `.env` file loading in code). Importing the module does not fail when `DATABASE_URL` is unset; the API fails only when the setting is actually used
-- [ ] `.env.example` is committed and lists every variable the stack reads: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `API_PORT` and `DATABASE_URL` (the host-side URL, pointing at `localhost`). Each has a one-line comment, and the password is an obvious placeholder (e.g. `change-me`)
+- [ ] `.env.example` is committed and lists every variable the stack reads: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `API_PORT` and `DATABASE_URL` (the host-side URL, pointing at `localhost`). Each has a one-line comment, and the password is an obvious placeholder (e.g. `change-me`). The `DATABASE_URL` comment says it must match the `POSTGRES_*` values above.
 - [ ] `.gitignore` ignores `.env` and any `.env.*` file except `.env.example`; `git check-ignore .env.local` succeeds and `git check-ignore .env.example` fails
-- [ ] Running `docker compose config` without a `.env` file (and without the variables in the shell) fails with a message naming the missing `POSTGRES_PASSWORD`, rather than starting Postgres with an empty password
+- [ ] Running `docker compose config` without a `.env` file (and without the variables in the shell) fails with a message naming the missing `POSTGRES_PASSWORD`, rather than starting Postgres with an empty password. 
+- [ ] In `docker-compose.yml`, only `POSTGRES_PASSWORD` is required (`${POSTGRES_PASSWORD:?...}`); `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PORT` and `API_PORT` have defaults matching `.env.example` (e.g. `${API_PORT:-8000}`)
 
 ### Docker Compose
 
@@ -83,7 +84,7 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 
 ## Constraints
 
-- Files this task may create or change: `docker-compose.yml`, `Dockerfile`, `.dockerignore`, `.env.example`, `.gitignore`, `Makefile`, `pyproject.toml`, `uv.lock`, `README.md`, `.github/workflows/ci.yml`, `src/budgeter/core/config.py`, `src/budgeter/core/database.py`, `src/budgeter/api/main.py`, `src/budgeter/api/routers/` and `src/budgeter/api/schemas/` (with `__init__.py` files), and test files under `tests/unit/` and `tests/integration/` (remove `tests/integration/.gitkeep` once a real file is there). Do not touch `_docs/` except to add implementation notes to this file.
+- Files this task may create or change: `docker-compose.yml`, `Dockerfile`, `.dockerignore`, `.env.example`, `.gitignore`, `Makefile`, `pyproject.toml`, `uv.lock`, `README.md`, `.github/workflows/ci.yml`, `src/budgeter/core/config.py`, `src/budgeter/core/database.py`, `src/budgeter/api/main.py`, `src/budgeter/api/routers/` and `src/budgeter/api/schemas/`, any missing `__init__.py` files under `src/budgeter/`, and test files (including `conftest.py`) under `tests/unit/` and `tests/integration/` (remove `tests/integration/.gitkeep` once a real file is there).. Do not touch `_docs/` except to add implementation notes to this file.
 - Dependencies: the human approves the ones listed above by approving this groomed task (AGENTS.md: no dependencies without asking). Do not add others, including pytest plugins or `uvicorn[standard]` extras.
 - Do not use SQLAlchemy yet; the health check uses psycopg directly with a short `connect_timeout`. Task 3 introduces SQLAlchemy.
 - Follow `_docs/plan.md` § 5 (Architecture: one image per service, built from this codebase; Code conventions: routers handle HTTP only, logic in service modules) and § 8 (secrets only in environment variables; `.env` git-ignored; `.env.example` committed).
@@ -91,6 +92,7 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 - Never commit `.env`, a real password or any financial data.
 - Pin GitHub Actions to a major version tag, as in task 1. Keep `make lint` and `make test` as the CI entry points.
 - Commit with messages that start with `task 02:`. Do not push; the human pushes and checks the CI run.
+- If `get_settings()` is cached, tests that change `DATABASE_URL` clear the cache before and after (`get_settings.cache_clear()`).
 
 ## QA verdict
 
