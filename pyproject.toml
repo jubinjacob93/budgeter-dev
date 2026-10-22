@@ -4,10 +4,16 @@ version = "0.1.0"
 description = "A self-hosted, AI-assisted personal finance app for a single household."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.156.4",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.16.1",
+    "uvicorn>=0.54.0",
+]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=8.4",
     "ruff>=0.13",
 ]
@@ -25,3 +31,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-rs"
+markers = [
+    "integration: needs a real Postgres reachable at DATABASE_URL",
+]
