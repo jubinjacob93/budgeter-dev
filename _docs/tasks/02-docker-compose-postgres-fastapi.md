@@ -108,7 +108,9 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 - Starlette prints a `StarletteDeprecationWarning` that recommends `httpx2` over `httpx` for `TestClient`. The task specifies `httpx`, so I kept it. It is only a warning.
 - Not verified: the green CI run on GitHub. The human needs to push first.
 
-## QA verdict: FAIL
+## QA verdict: PASS
+
+Re-check at `03bcd47`: that commit only relaxes the outage criterion from 5 to 10 seconds, and no code changed since `b9a12e3`. Only that criterion was re-checked. The other verdicts below carry over from the first pass, which was a FAIL on the 5-second limit.
 
 Checked on a fresh clone of `task-02` at `b9a12e3` (Docker 29.8.2, Compose v5.6.0, WSL2). The stack ran under `COMPOSE_PROJECT_NAME=budgeterqa` with `.env` copied from `.env.example` and the password changed.
 
@@ -147,11 +149,12 @@ Checked on a fresh clone of `task-02` at `b9a12e3` (Docker 29.8.2, Compose v5.6.
 
 - [x] Layout: app in `api/main.py`, router in `api/routers/health.py`, check in `core/database.py`, schema in `api/schemas/health.py` - PASS
 - [x] DB reachable: `200` `{"status": "ok", "database": "ok"}` - PASS
-- [ ] DB unreachable: `503` within 5 seconds, API keeps running, `200` again after `start db` without restarting `api` - FAIL
-      Body, status code, API staying up and recovery after `docker compose start db` all pass. The 5-second limit does not hold on the first request after `db` stops in a freshly started stack.
-      Ran `make run`, waited for `/health` = 200, then `docker compose stop db` and timed `curl localhost:8000/health`.
-      First request: 7.88 s, 7.87 s and 4.01 s in three fresh starts, so 2 of 3 were over 5 s. Later requests took 3.85–4.02 s (19 samples).
-      Inside the `api` container, `socket.getaddrinfo('db', 5432)` alone takes 3.9–4.0 s before `gaierror`. The time goes to resolving `db` once the container is gone, which `connect_timeout` does not cover. Even the steady-state 3.9 s leaves about 1 s of margin.
+- [x] DB unreachable: `503` within 10 seconds, API keeps running, `200` again after `start db` without restarting `api` - PASS (re-checked at `03bcd47`)
+      Fresh clone at `03bcd47`. Did five cycles of `make run`, wait for `/health` = 200, `docker compose stop db`, three timed `curl localhost:8000/health`, `docker compose start db`, `curl` again, `docker compose down`.
+      Every outage request returned `503` with `{"status": "error", "database": "unavailable"}`. The first request after the stop took 7.87, 7.87, 4.00, 4.01 and 7.86 s. Later requests took 3.85–3.92 s. Slowest overall: 7.87 s, under 10 s.
+      `api` stayed running throughout. After `start db`, `/health` returned `200` `{"status": "ok", "database": "ok"}` every time. The `api` uptime kept counting through each stop/start, so it was never restarted.
+      Note: the worst case leaves about 2 s of margin on this WSL2 machine. The time goes to the DNS lookup for `db`, as found in the first pass.
+      First pass at `b9a12e3` against the 5-second limit: FAIL (first requests of 7.88 s and 7.87 s).
 - [x] Wrong password: `503` with the same body - PASS (integration test `test_health_503_with_wrong_password` passes against the live db)
 - [x] `503` body has no exception, URL, user or password; one warning per failure with the error type only - PASS (API log shows only `Database check failed: OperationalError`, once per failed request; grep for user/password found nothing; also covered by unit test)
 - [x] API starts with the database down - PASS (`docker compose up -d --no-deps api` with no db: running, `/health` returns 503)
@@ -180,6 +183,6 @@ Checked on a fresh clone of `task-02` at `b9a12e3` (Docker 29.8.2, Compose v5.6.
 ### Other checks
 
 - No `.env`, real passwords, tokens or financial data are committed. `git ls-files` lists only `.env.example`, and the only passwords in the repo are `change-me`, `ci-throwaway-password` and test strings.
-- Not covered by tests: the 5-second limit and the API recovering after the database comes back. Only manual checks exercise them.
+- Not covered by tests: the 10-second limit and the API recovering after the database comes back. Only manual checks exercise them.
 
 Tests: `make test` on a fresh clone without `DATABASE_URL`: 9 passed, 2 skipped. With the stack running and `.env` exported: 11 passed, 0 failed. `make lint` passes.
