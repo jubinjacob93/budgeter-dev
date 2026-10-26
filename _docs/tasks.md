@@ -16,7 +16,7 @@ Goal: A clean Python project that installs, lints and passes one test, locally a
 Depends on: 0
 Description: Initialize the repository with uv, the folder layout from the plan's Repository layout section, pytest and Ruff configured in `pyproject.toml`, a `.gitignore`, a README stub and one trivial test. Add a Makefile with `make test` and `make lint`, plus a GitHub Actions workflow that runs Ruff and pytest on every push and pull request, with its status badge in the README.
 
-## 2. Run Postgres and a FastAPI skeleton in Docker Compose (M1)
+## 2. Run Postgres and a FastAPI skeleton in Docker Compose (M1) ✅
 Goal: `docker compose up` starts Postgres (with pgvector) and a FastAPI app with a health check.
 Depends on: 1
 Description: Create `docker-compose.yml` with a pgvector-enabled Postgres service (named volume, health check) and a FastAPI service built from its own Dockerfile. Add a `/health` endpoint that also checks the database connection, a test for it, and a `.env.example` for all settings, with `.env` git-ignored.
