@@ -43,7 +43,7 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 
 - [ ] The FastAPI app lives in `src/budgeter/api/main.py` and includes a router from `src/budgeter/api/routers/health.py`. The database check is a function in `src/budgeter/core/database.py`; the router only calls it and shapes the response (schema in `src/budgeter/api/schemas/health.py`)
 - [ ] With the database reachable, `GET /health` returns `200` and `{"status": "ok", "database": "ok"}`
-- [ ] With the database unreachable (e.g. `docker compose stop db`), `GET /health` returns `503` and `{"status": "error", "database": "unavailable"}` within 5 seconds, and the API process keeps running. It returns `200` again after `docker compose start db`, without restarting `api`
+- [ ] With the database unreachable (e.g. `docker compose stop db`), `GET /health` returns `503` and `{"status": "error", "database": "unavailable"}` within 10 seconds (in WSL, the first request after stopping `db` can take about 8 seconds because the DNS lookup for `db` is slow; on Linux and in CI it is faster), and the API process keeps running. It returns `200` again after `docker compose start db`, without restarting `api`
 - [ ] With a wrong database password, `GET /health` returns `503` with the same body
 - [ ] The `503` body never contains the exception message, the database URL, the user name or the password. When the check fails, the API logs one warning that names the error type, without the database URL or password
 - [ ] The API starts even when the database is down at startup (no connection is opened at import or startup)
