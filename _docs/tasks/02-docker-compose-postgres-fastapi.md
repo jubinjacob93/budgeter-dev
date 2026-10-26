@@ -108,6 +108,78 @@ After `cp .env.example .env`, `make run` starts a Postgres service with pgvector
 - Starlette prints a `StarletteDeprecationWarning` that recommends `httpx2` over `httpx` for `TestClient`. The task specifies `httpx`, so I kept it. It is only a warning.
 - Not verified: the green CI run on GitHub. The human needs to push first.
 
-## QA verdict
+## QA verdict: FAIL
 
-(QA adds its PASS or FAIL verdict here.)
+Checked on a fresh clone of `task-02` at `b9a12e3` (Docker 29.8.2, Compose v5.6.0, WSL2). The stack ran under `COMPOSE_PROJECT_NAME=budgeterqa` with `.env` copied from `.env.example` and the password changed.
+
+### Dependencies
+
+- [x] Runtime deps are exactly fastapi, uvicorn, psycopg[binary], pydantic-settings; httpx in dev; nothing else - PASS (`uv tree --no-dev --depth 1`)
+- [x] `uv.lock` updated; `uv sync --locked` succeeds on a fresh clone - PASS
+
+### Configuration
+
+- [x] `Settings` reads `DATABASE_URL` from env only; import works without it, use fails - PASS (no `env_file`; covered by unit tests, subprocess import test passes)
+- [x] `.env.example` lists all six variables, each with a comment, placeholder password, `DATABASE_URL` on localhost with a "must match" comment - PASS
+- [x] `.gitignore`: `git check-ignore .env.local` exits 0, `git check-ignore .env.example` exits 1 - PASS
+- [x] `docker compose config` without `.env`/vars fails naming `POSTGRES_PASSWORD` - PASS (exit 1, message printed twice: once for `db`, once for `api`)
+- [x] Only `POSTGRES_PASSWORD` required; other vars default to `.env.example` values - PASS
+
+### Docker Compose
+
+- [x] Two services, `db` and `api` - PASS
+- [x] `db`: `pgvector/pgvector:0.8.7-pg17`, named volume, `pg_isready` health check - PASS
+- [x] `db` published on `127.0.0.1` only - PASS (`docker compose ps`: `127.0.0.1:5432->5432/tcp`)
+- [x] `api` built from `Dockerfile` target `api`, `depends_on: service_healthy`, published on `127.0.0.1:8000` - PASS
+- [x] `DATABASE_URL` in `api` uses host `db`, built from `POSTGRES_*` - PASS (`docker compose config` shows `@db:5432`)
+- [x] `make run` runs `docker compose up --build`; `db` healthy, `api` running - PASS
+- [x] `pg_available_extensions` query for `vector` returns one row - PASS
+- [x] Data survives `down` + `make run`; `down -v` removes it - PASS (table `qa_persist` present after restart, gone after `down -v`)
+
+### Dockerfile
+
+- [x] Stage `api` on `python:3.13-slim`, `uv sync --locked --no-dev`, uvicorn on 8000 - PASS
+- [x] Non-root - PASS (`docker compose exec api whoami` prints `app`)
+- [x] `.dockerignore` excludes `.env`, `.env.*`, `.git`, `.venv`, caches, `_docs/` - PASS (`/app` in the container holds only `.venv`, `src`, `pyproject.toml`, `uv.lock`, `README.md`)
+- [x] `docker build --target api .` succeeds without `.env` - PASS
+
+### API and /health
+
+- [x] Layout: app in `api/main.py`, router in `api/routers/health.py`, check in `core/database.py`, schema in `api/schemas/health.py` - PASS
+- [x] DB reachable: `200` `{"status": "ok", "database": "ok"}` - PASS
+- [ ] DB unreachable: `503` within 5 seconds, API keeps running, `200` again after `start db` without restarting `api` - FAIL
+      Body, status code, API staying up and recovery after `docker compose start db` all pass. The 5-second limit does not hold on the first request after `db` stops in a freshly started stack.
+      Ran `make run`, waited for `/health` = 200, then `docker compose stop db` and timed `curl localhost:8000/health`.
+      First request: 7.88 s, 7.87 s and 4.01 s in three fresh starts, so 2 of 3 were over 5 s. Later requests took 3.85–4.02 s (19 samples).
+      Inside the `api` container, `socket.getaddrinfo('db', 5432)` alone takes 3.9–4.0 s before `gaierror`. The time goes to resolving `db` once the container is gone, which `connect_timeout` does not cover. Even the steady-state 3.9 s leaves about 1 s of margin.
+- [x] Wrong password: `503` with the same body - PASS (integration test `test_health_503_with_wrong_password` passes against the live db)
+- [x] `503` body has no exception, URL, user or password; one warning per failure with the error type only - PASS (API log shows only `Database check failed: OperationalError`, once per failed request; grep for user/password found nothing; also covered by unit test)
+- [x] API starts with the database down - PASS (`docker compose up -d --no-deps api` with no db: running, `/health` returns 503)
+- [x] Check does not block the event loop - PASS (plain `def` endpoint and dependency)
+- [x] `/openapi.json` lists `/health`; `/docs` loads - PASS (live: paths `['/health']`, `/docs` 200)
+
+### Tests
+
+- [x] Unit tests cover 200/503 through a dependency override, no DB needed - PASS
+- [x] Integration tests: valid URL → 200, wrong password → 503 via `TestClient` - PASS
+- [x] Marked `integration` (registered); skipped with a visible reason without `DATABASE_URL`; fail, not skip, when it is set but the DB is unreachable - PASS (skip reason printed via `-rs`; the skip depends only on the env var, so an unreachable DB reaches the status assertion and fails)
+- [x] Fresh clone, no DB: `make test` and `make lint` exit 0, integration tests skipped - PASS
+- [x] Stack running with `.env` exported: integration tests run and pass - PASS
+
+### CI
+
+- [x] Postgres service from the same pgvector image, with a health check and `DATABASE_URL`; integration tests run - PASS (job log for run 39719066928: `tests/integration/test_health_db.py ..`, 11 passed)
+- [x] CI runs `docker build --target api .` - PASS (step "Build API image": success)
+- [x] Throwaway password, no repository secret - PASS
+- [x] Workflow run green after push - PASS (runs 39719066928 (push, `b9a12e3`) and 39823806155 (pull_request) both succeeded)
+
+### README
+
+- [x] Development section adds `cp .env.example .env`, `make run`, the `localhost:8000/health` URL and how to run integration tests - PASS
+
+### Other checks
+
+- No `.env`, real passwords, tokens or financial data are committed. `git ls-files` lists only `.env.example`, and the only passwords in the repo are `change-me`, `ci-throwaway-password` and test strings.
+- Not covered by tests: the 5-second limit and the API recovering after the database comes back. Only manual checks exercise them.
+
+Tests: `make test` on a fresh clone without `DATABASE_URL`: 9 passed, 2 skipped. With the stack running and `.env` exported: 11 passed, 0 failed. `make lint` passes.
