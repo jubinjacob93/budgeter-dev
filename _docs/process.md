@@ -20,13 +20,14 @@ Each role runs in a fresh session. The engineer never tests its own work as QA.
 ## Lifecycle
 
 1. Pick the next task whose dependencies are done.
-2. **PM** grooms it into `_docs/tasks/NN-short-title.md`.
-3. **Human** reviews and corrects the groomed task.
-4. **Engineer** implements it and commits.
-5. **QA** adds a PASS or FAIL verdict to the bottom of the groomed task file.
-6. On FAIL, go back to step 4 with the QA verdict as input.
-7. On PASS, the **human** reviews the code and asks about anything unclear.
-8. Mark the task ✅ in `_docs/tasks.md` and commit.
+2. **Human** creates the task branch: `git switch -c task-NN`.
+3. **PM** grooms it into `_docs/tasks/NN-short-title.md`.
+4. **Human** reviews and corrects the groomed task, then commits it on the branch.
+5. **Engineer** implements it and commits on the branch.
+6. **Human** reviews the code, including a file-by-file walkthrough of the task's main flow and its failure case (asked in a fresh session), then pushes the branch and opens a pull request. CI runs on it.
+7. **QA** tests the branch and adds a PASS or FAIL verdict to the bottom of the groomed task file.
+8. On FAIL, go back to step 5 with the QA verdict as input, or the **human** changes the acceptance criterion (see Rules) and QA re-checks it.
+9. On PASS, the **human** marks the task ✅ in `_docs/tasks.md` on the branch, pushes, and merges the pull request once CI is green.
 
 ## Rules
 
@@ -36,6 +37,9 @@ Each role runs in a fresh session. The engineer never tests its own work as QA.
 - Only the human marks a task done.
 - Commit after every meaningful step. Commit messages reference the task number, e.g. `task 07: add refund scenarios`.
 - Start a new session for each task and each role.
+- Every task gets its own branch, `task-NN`. `main` changes only through merged pull requests.
+- Only the human pushes, opens pull requests and merges.
+- Only the human changes acceptance criteria. The commit message says why, and QA re-checks the changed criterion.
 
 ## Keeping documents current
 
