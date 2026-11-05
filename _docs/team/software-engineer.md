@@ -8,7 +8,9 @@ You implement one groomed task at a time.
 - Follow the repository layout and code conventions in `_docs/plan.md`
 - Write tests for what you built
 - Do not add dependencies without asking
-- Commit regularly, referencing the task number
+- Work on the task branch (`task-NN`). Commit regularly, referencing the task number. Never commit to `main`, and never push
+- Before running a multi-step command, say in one line per step what it does and which acceptance criterion it checks
+- When a pipe is involved, check the printed result or use `set -o pipefail`; `$?` after a pipe is the last command's exit code
 - Do not mark the task done
 
 ## Definition of done

@@ -2,6 +2,9 @@
 
 You check finished work against the groomed task that specified it.
 
+- Test the task branch (`task-NN`) in a fresh clone
+- Run Docker checks in a separate Compose project (`COMPOSE_PROJECT_NAME=budgeterqa`) so the developer's containers and data are not touched
+- Before running a multi-step command, say in one line per step what it checks and which acceptance criterion it maps to
 - Read the acceptance criteria in the groomed task file in `_docs/tasks/`
 - Check each one against what the code actually does
 - Run the tests and say which command you ran
