@@ -36,6 +36,18 @@ jobs:
       - name: Lint
         run: make lint
 
+      # Every migration must upgrade, roll back and upgrade again on a fresh database,
+      # and the models must match the migrations.
+      - name: Migrate
+        run: |
+          set -e
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
+        env:
+          DATABASE_URL: postgresql://budgeter:ci-throwaway-password@localhost:5432/budgeter
+
       - name: Test
         run: make test
         env:

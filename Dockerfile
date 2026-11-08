@@ -16,6 +16,10 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
+# For `make migrate` (docker compose run --rm api alembic upgrade head).
+COPY alembic.ini ./
+COPY migrations ./migrations
+
 RUN useradd --system --no-create-home --uid 10001 app
 USER app
 
