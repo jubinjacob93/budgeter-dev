@@ -97,6 +97,25 @@ The app reaches Postgres through one SQLAlchemy 2.0 engine and session factory b
 - Pin GitHub Actions to a major version tag. Keep `make lint` and `make test` as the CI entry points.
 - Commit with messages that start with `task 03:`. Do not push; the human pushes and checks the CI run.
 
+## Implementation notes
+
+- **Dependencies:** added `sqlalchemy>=2.1.8` and `alembic>=1.20.1` with `uv add`. `mako` and `markupsafe` come in transitively. No other runtime dependency was added.
+- **`core/database.py`:** `psycopg_url()` forces `postgresql+psycopg`, and `build_engine(url)` creates an engine (`pool_pre_ping=True`, `connect_timeout=2`, `echo=False`) without connecting. `get_engine()` is `lru_cache`d around `build_engine(get_settings().database_url)`. The session factory is cached per engine (`_session_factory(engine)`, `maxsize=1`), so `get_engine.cache_clear()` alone also gives a fresh factory. `get_session()` uses the session as a context manager, so it closes when the caller raises.
+- **`check_database` signature changed** from `(database_url: str)` to `(engine: Engine)`. `database_is_reachable` now calls `check_database(get_engine())`. It catches `SQLAlchemyError`, and the logged name is still `OperationalError`.
+- **Alembic:** `env.py` uses `get_engine().connect()` and never `set_main_option`. It calls `fileConfig(..., disable_existing_loggers=False)` so that running Alembic from pytest doesn't silence the app's loggers (that would break the caplog test). Offline mode exits with a clear message. `alembic.ini` has post-write hooks that run `ruff check --fix` and `ruff format` on new revisions. **Note:** the fix hook removes the template's `op`/`sa` imports when a revision is empty, so add `from alembic import op` back when you fill one in (as in `0001`). Create revisions with `uv run alembic revision -m "..." --rev-id 000N`.
+- **`.dockerignore`:** `__pycache__/` and `*.pyc` became `**/__pycache__/` and `**/*.pyc`. The old patterns matched only the root, so a host `migrations/versions/__pycache__` was copied into the image.
+- **README:** one `make migrate` line under "Running the stack". I didn't add a Migrations section (task 54).
+- **Tests:** `tests/unit/test_database.py` covers driver normalization for both forms, engine reuse and settings, the session factory following an engine reset, `get_session` closing on an exception, no engine created at import (subprocess), and the naming convention with no tables. The subprocess import test in `test_config.py` now also imports `budgeter.core.database`. `tests/integration/conftest.py` resets settings and engine around every integration test. New `test_migrations.py` (upgrade only, never downgrade) and `test_session.py`.
+- **Checked by hand (WSL2):**
+  - Fresh throwaway `pgvector/pgvector:0.8.7-pg17` container: `upgrade head` gives exit 0, one `vector` row and `0001 (head)`. A second upgrade exits 0. `downgrade base` exits 0 and leaves 0 rows. Upgrading again exits 0, and `alembic check` exits 0.
+  - `DATABASE_URL` unset gives exit 1 with a pydantic error naming `database_url`.
+  - Port 1 and a wrong password both exit 1 in under 1 s, with no password in the output; a `%25` in the password works.
+  - `make migrate` runs twice with exit 0 and no host `DATABASE_URL`.
+  - The image runs as `app` and contains `alembic.ini` and `migrations/`.
+  - `/health` gives 200. With `db` stopped it gives 503 in 7.9 s, the same WSL DNS delay QA found in task 2. It returns 200 after `start db` without restarting `api`.
+  - `make test` passes against the dev stack (21 passed) and on a fresh clone without a database (17 passed, 4 skipped). `make lint` passes.
+- **Not done by me:** `docker compose down -v`, because it would delete the existing dev volume `budgeter-dev_db-data`. I covered the fresh-database criteria with a throwaway container instead; QA or the human can run the `down -v` check. The CI run can only be checked after the push.
+
 ## QA verdict
 
 (QA adds its PASS or FAIL verdict here.)

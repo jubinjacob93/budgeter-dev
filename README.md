@@ -19,6 +19,7 @@ make test    # run the test suite
 ```sh
 cp .env.example .env   # then set POSTGRES_PASSWORD (and DATABASE_URL to match)
 make run               # build and start Postgres (with pgvector) and the API
+make migrate           # in another terminal: apply Alembic migrations to the Compose database
 ```
 
 The API is at <http://localhost:8000/health> by default (`API_PORT` in `.env`), and its OpenAPI docs are at <http://localhost:8000/docs>. Both services listen on `127.0.0.1` only.
