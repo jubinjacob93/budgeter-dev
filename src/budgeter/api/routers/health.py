@@ -3,14 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 
 from budgeter.api.schemas.health import HealthResponse
-from budgeter.core.config import get_settings
-from budgeter.core.database import check_database
+from budgeter.core.database import check_database, get_engine
 
 router = APIRouter(tags=["health"])
 
 
 def database_is_reachable() -> bool:
-    return check_database(get_settings().database_url)
+    return check_database(get_engine())
 
 
 # A plain `def` endpoint runs in FastAPI's thread pool, so the blocking check

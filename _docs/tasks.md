@@ -21,7 +21,7 @@ Goal: `docker compose up` starts Postgres (with pgvector) and a FastAPI app with
 Depends on: 1
 Description: Create `docker-compose.yml` with a pgvector-enabled Postgres service (named volume, health check) and a FastAPI service built from its own Dockerfile. Add a `/health` endpoint that also checks the database connection, a test for it, and a `.env.example` for all settings, with `.env` git-ignored.
 
-## 3. Set up SQLAlchemy and Alembic (M1)
+## 3. Set up SQLAlchemy and Alembic (M1) ✅
 Goal: The app connects to Postgres through SQLAlchemy and manages the schema with Alembic.
 Depends on: 2
 Description: Add a database module that builds a SQLAlchemy 2.0 engine and session from environment variables. Initialize Alembic with an initial migration that enables the `vector` extension, and add a CI step that runs all migrations against a fresh Postgres service container.

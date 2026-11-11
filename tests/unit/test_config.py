@@ -19,7 +19,11 @@ def test_import_does_not_need_database_url():
     env = {key: value for key, value in os.environ.items() if key != "DATABASE_URL"}
 
     result = subprocess.run(
-        [sys.executable, "-c", "import budgeter.core.config, budgeter.api.main"],
+        [
+            sys.executable,
+            "-c",
+            "import budgeter.core.config, budgeter.core.database, budgeter.api.main",
+        ],
         env=env,
         capture_output=True,
         text=True,

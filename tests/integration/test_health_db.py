@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from budgeter.api.main import app
 from budgeter.core.config import get_settings
+from budgeter.core.database import get_engine
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -20,14 +21,14 @@ pytestmark = [
 
 @pytest.fixture
 def client_for(monkeypatch):
+    # conftest.py resets the settings and the engine before and after each test.
     def make(database_url):
         monkeypatch.setenv("DATABASE_URL", database_url)
         get_settings.cache_clear()
+        get_engine.cache_clear()
         return TestClient(app)
 
-    get_settings.cache_clear()
     yield make
-    get_settings.cache_clear()
 
 
 def with_wrong_password(database_url):

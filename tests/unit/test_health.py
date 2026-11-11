@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from budgeter.api.main import app
 from budgeter.api.routers.health import database_is_reachable
-from budgeter.core.database import check_database
+from budgeter.core.database import build_engine, check_database
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def test_check_database_failure_logs_error_type_only(caplog):
     url = "postgresql://someuser:secret-password@127.0.0.1:1/somedb"
 
     with caplog.at_level(logging.WARNING, logger="budgeter.core.database"):
-        assert check_database(url) is False
+        assert check_database(build_engine(url)) is False
 
     assert len(caplog.records) == 1
     message = caplog.records[0].getMessage()
