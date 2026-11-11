@@ -116,6 +116,93 @@ The app reaches Postgres through one SQLAlchemy 2.0 engine and session factory b
   - `make test` passes against the dev stack (21 passed) and on a fresh clone without a database (17 passed, 4 skipped). `make lint` passes.
 - **Not done by me:** `docker compose down -v`, because it would delete the existing dev volume `budgeter-dev_db-data`. I covered the fresh-database criteria with a throwaway container instead; QA or the human can run the `down -v` check. The CI run can only be checked after the push.
 
-## QA verdict
+## QA verdict: PASS
 
-(QA adds its PASS or FAIL verdict here.)
+Tested `task-03` at `0a6faf6` in a fresh clone. Docker checks ran in Compose project `budgeterqa` (host ports 55432 and 58000, a throwaway `.env` in the clone only). The dev volume `budgeter-dev_db-data` was not touched.
+
+### Dependencies
+
+- [x] Runtime deps are exactly `fastapi`, `psycopg[binary]`, `pydantic-settings`, `uvicorn`, `sqlalchemy>=2.1.8`, `alembic>=1.20.1` - PASS
+      The diff against `main` adds only these two. `uv.lock` has no `psycopg2`, `pgvector` or `asyncpg`
+- [x] `uv.lock` updated, `uv sync --locked` succeeds on a fresh clone - PASS (exit 0)
+
+### Engine and session
+
+- [x] `get_engine()` is cached and created on first use; importing `budgeter.core.database` and `budgeter.api.main` without `DATABASE_URL` works and opens no connection - PASS
+      The subprocess test in `test_config.py` covers `budgeter.core.database`. `test_database.py` also checks `cache_info().currsize == 0` after import
+- [x] Both URL forms give `postgresql+psycopg`; `.env.example` and Compose keep plain `postgresql://` - PASS (unit test covers both forms)
+- [x] `pool_pre_ping=True`, `connect_timeout=2` - PASS
+      With a blackholed host (10.255.255.1), `alembic upgrade head` failed in 2.7 s. `/health` went back to 200 after `start db` with no error from stale pooled connections
+- [x] The engine can be reset; tests that change `DATABASE_URL` reset settings and engine before and after - PASS (`tests/integration/conftest.py`, `tests/unit/test_database.py` fixtures)
+- [x] `sessionmaker(expire_on_commit=False)`; `get_session()` closes the session also when the caller raises; no endpoint uses it; an integration test runs `select 1` - PASS
+- [x] Synchronous engine, plain `def` endpoint - PASS (no `create_async_engine` anywhere)
+- [x] Echo off; the URL and password are never logged or returned - PASS
+
+### Declarative base
+
+- [x] `Base(DeclarativeBase)` with naming convention keys `ix`, `uq`, `ck`, `fk`, `pk`, re-exported from `models/__init__.py` - PASS
+- [x] `Base.metadata.tables` is empty - PASS
+
+### /health on SQLAlchemy
+
+- [x] `check_database` runs `select 1` through the engine; the router, schema and `database_is_reachable` keep their roles - PASS
+- [x] Task 2 `/health` behaviour holds - PASS
+      200 `{"status":"ok","database":"ok"}` when the database is up. With `db` stopped: 503 `{"status":"error","database":"unavailable"}` in 4.0 s. Wrong password: 503 (integration test). `docker compose restart api` with `db` stopped: the API starts and serves 503. After `docker compose start db`: 200 with the same `api` `StartedAt`. The only test changes are the signature change and the engine reset
+- [x] Failure logs only the error type - PASS
+      The API log has `Database check failed: OperationalError` (22 times) and no password, user or URL. The unit log test still checks this
+
+### Alembic
+
+- [x] `alembic.ini` at the root, `script_location` is `migrations/`, no `sqlalchemy.url` - PASS
+- [x] `env.py` uses `get_engine()` and no `set_main_option`; `target_metadata = Base.metadata` from `budgeter.core.models` - PASS
+      A role with password `a%b` (URL `a%25b`) ran `alembic current` with exit 0
+- [x] `file_template = %%(rev)s_%%(slug)s`; `0001_enable_vector_extension.py`, revision `0001`, `down_revision = None` - PASS
+- [x] Upgrade uses `CREATE EXTENSION IF NOT EXISTS vector`, downgrade uses `DROP EXTENSION IF EXISTS vector`, no tables - PASS
+- [x] Fresh database: `upgrade head` exits 0, one `vector` row, `alembic current` prints `0001 (head)` - PASS
+- [x] A second `upgrade head` exits 0 and runs nothing (no "Running upgrade" line, still one row) - PASS
+- [x] `downgrade base` exits 0 and leaves 0 `vector` rows; a later `upgrade head` exits 0 with 1 row - PASS
+- [x] `alembic check` exits 0 ("No new upgrade operations detected.") - PASS
+- [x] `DATABASE_URL` unset: exit 1 with a pydantic error naming `database_url`, raised before an engine exists - PASS
+      Not checked at syscall level (no `strace`). Settings fail before `build_engine` runs, so no connection is possible
+- [x] Unreachable or wrong password: non-zero within 15 s, no password in output - PASS
+      Port 1: exit 1 in 0.7 s. Blackholed host: exit 1 in 2.7 s. Wrong password: exit 1 in 0.5 s. The password was absent from the output in all three
+- [x] `migrations/` passes `make lint` - PASS
+
+### make migrate and Docker
+
+- [x] `make migrate` runs `docker compose run --rm api alembic upgrade head`, starts `db` through `depends_on` and needs no host `DATABASE_URL` - PASS
+      With the whole `budgeterqa` stack down, `make migrate` created and started `budgeterqa-db-1` and exited 0
+- [x] After `docker compose down -v`: `make run` and `make migrate` exit 0, the `vector` row is present, a second `make migrate` exits 0 - PASS
+      Ran `down -v` in `budgeterqa`, `make run` in the background, then `make migrate` twice (exit 0 both times; the first ran `-> 0001`, the second ran nothing). `pg_extension` has `vector`, and `alembic_version` is `0001`. `make run` exited 0 at `down`
+- [x] The image contains `alembic.ini` and `migrations/`, `.dockerignore` doesn't exclude them, and the container runs as `app` - PASS (`whoami` gives `app`; no `__pycache__` in `migrations/versions`)
+- [x] The API doesn't migrate on startup - PASS
+      After `make run` on a fresh volume, `/health` was 200, but there was no `vector` extension and no `alembic_version` table until `make migrate`
+
+### Tests
+
+- [x] Unit tests cover driver normalization (both forms), no engine at import, naming convention keys, and `/health` 200, 503 and log - PASS
+- [x] Integration tests are marked, skip with a visible reason when `DATABASE_URL` is unset, and fail when the database is unreachable; they cover `command.upgrade` with the repo `alembic.ini` plus checks for `vector` and the revision against the script head, `select 1` via `get_session()`, and the task 2 `/health` tests - PASS
+      With `DATABASE_URL` pointing at port 1: 3 failed and 1 passed (the wrong-password test, which expects 503 anyway)
+- [x] Integration tests never run `downgrade` - PASS (the only match is a comment)
+- [x] Fresh clone without a database: `make test` and `make lint` exit 0 with integration skipped; with the stack up and `.env` exported, `make test` runs the integration tests - PASS
+
+### CI
+
+- [x] The `Migrate` step runs before `Test` with the same `DATABASE_URL`: upgrade, downgrade base, upgrade, check, with `set -e` and no `continue-on-error` - PASS
+- [x] A failing migration fails the workflow - PASS
+      Checked by reading the workflow: `set -e`, the default `bash -e` shell and no `continue-on-error`. No broken migration was run
+- [x] The CI run for `0a6faf6` is green; the log shows Migrate (upgrade, downgrade, upgrade, "No new upgrade operations detected.") and the integration tests passing, not skipped - PASS (run 42560997114, 21 passed; PR run 42561293007 also green)
+
+### Documentation
+
+- [x] `AGENTS.md` unchanged - PASS (not in the diff against `main`; all changed files are on the allowed list)
+
+### Other
+
+- No secrets, `.env`, tokens or real financial data are committed. Passwords in the repo are the placeholders `change-me` and `ci-throwaway-password` and test strings.
+- Gaps (not failures): 503 with `db` stopped and recovery after `start db` are checked by hand only, as in task 2. No automated test runs `upgrade head` twice.
+
+Tests:
+- `make test` on a fresh clone without `DATABASE_URL`: 17 passed, 4 skipped, 0 failed
+- `make test` with the `budgeterqa` stack up and `.env` exported: 21 passed, 0 skipped, 0 failed
+- `make lint`: passed
