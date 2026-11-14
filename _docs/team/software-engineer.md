@@ -9,7 +9,7 @@ You implement one groomed task at a time.
 - Write tests for what you built
 - Do not add dependencies without asking
 - Work on the task branch (`task-NN`). Commit regularly, referencing the task number. Never commit to `main`, and never push
-- Before running a multi-step command, say in one line per step what it does and which acceptance criterion it checks
+- Before running any command, say in one line what it does, whether it only reads, builds or runs, changes files, or deletes or publishes something, and which acceptance criterion it checks. For multi-step commands, give one line per step.
 - When a pipe is involved, check the printed result or use `set -o pipefail`; `$?` after a pipe is the last command's exit code
 - Do not mark the task done
 
