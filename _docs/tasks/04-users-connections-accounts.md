@@ -102,6 +102,23 @@ Depends on: 3
 - Follow `_docs/plan.md` § 2 (household model, ownership tags), § 5 (Repository layout: shared models in `core/`; Code conventions: models map to the database) and § 6 (data model).
 - Commit with messages that start with `task 04:`. Do not push; the human pushes and checks the CI run.
 
+## Implementation notes
+
+- **Models**: `user.py`, `connection.py`, `account.py` and `enums.py` in `core/models/`. `enums.string_enum()` builds the shared column type: `sa.Enum(..., native_enum=False, create_constraint=True, values_callable=...)`. It gives a `VARCHAR` sized to the longest value plus a CHECK constraint named `ck_<table>_<column>`. Each model has an explicit `__repr__`; `Connection.__repr__` leaves out `encrypted_token`.
+- **Migration `0002`**: generated with the exact autogenerate command and kept almost as generated. I only replaced the "auto generated" comments. The Ruff hook kept the `op` / `sa` imports. Alembic applies the metadata's naming convention to the CHECK constraints the `sa.Enum` columns create, so the database names are `ck_connections_provider`, `ck_accounts_owner_tag` and so on. I checked them in `pg_constraint`.
+- **Composite unique name**: the `uq` convention in `base.py` uses only the first column, so `(connection_id, provider_account_id)` is named `uq_accounts_connection_id`. I kept the convention's name because the criterion asks for it, and `base.py` is outside this task's files. Task 9's upsert can target it by that name or by its columns.
+- **Tests**: `tests/unit/test_models.py` covers columns, types, defaults, FKs, enum values, convention names and `repr`. `tests/integration/test_models_db.py` has one test per scenario in the list. `tests/integration/conftest.py` gains:
+  - `migrated_engine` (session scope): runs `alembic upgrade head`, then asserts `select count(*) from users` is unchanged at the end of the run.
+  - `db_session`: an outer transaction that is rolled back after each test, with `join_transaction_mode="create_savepoint"`. Statements expected to fail run inside `session.begin_nested()`.
+- **Changed test**: `tests/unit/test_database.py::test_base_metadata_has_naming_convention_and_no_tables` asserted that `Base.metadata` has no tables. That is no longer true, so it is now `..._and_model_tables` and asserts the three tables.
+- **Verified locally** (2026-11-14):
+  - `make test` with `.env` exported: 69 passed, the 17 new integration tests included. `users` count was 0 before and 0 after.
+  - With `DATABASE_URL` unset, `make test` gave 45 passed and 24 skipped with a reason. `make lint` is clean.
+  - On a scratch database (created and then dropped): `upgrade head` → `current` prints `0002 (head)` → `downgrade 0001` leaves only `alembic_version`, no enum types, `vector` kept → `upgrade head` → `check` reports no changes. The CI sequence (upgrade, downgrade base, upgrade, check) also passed.
+  - On the dev DB at `0001`, `make migrate` moved it to `0002`.
+- **Stale image gotcha**: `make migrate` runs `docker compose run --rm api`, which uses the existing image. The image copies `migrations/` at build time, so with an image built before this task, `make migrate` exits 0 but stays at `0001`. Run `docker compose build api` (or `make run`, which builds) first. I left the Makefile alone because it's outside this task's files. A `--build` flag there may be worth a follow-up.
+- **Not done by me**: the CI run for the pushed commit. That needs the human push.
+
 ## QA verdict
 
 (QA adds its PASS or FAIL verdict here.)
