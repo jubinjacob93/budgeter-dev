@@ -231,9 +231,9 @@ Provider data is stored raw, then normalized into application tables. Raw payloa
 
 | Table | Key fields | Notes |
 |---|---|---|
-| `users` | id, email, password_hash | 1–2 per household |
-| `connections` | id, user_id, provider, encrypted_token, status | One per institution login |
-| `accounts` | id, connection_id, name, type, owner_tag, balance | `owner_tag`: Mine / Partner / Joint |
+| `users` | id, email, password_hash, created_at | 1–2 per household. `email` is unique and stored lower-case (checked by the database) |
+| `connections` | id, user_id, provider, encrypted_token, status, created_at | One per institution login, or one per seed / CSV / Monarch import (`provider` `seed` / `csv` / `monarch`, no token). `provider`: seed / csv / monarch / plaid / simplefin; `status`: active / login_required / error / disconnected |
+| `accounts` | id, connection_id, provider_account_id, name, type, owner_tag, balance, currency, created_at | Every account has a connection. Unique on (connection_id, provider_account_id). `owner_tag` (mine / partner / joint, default mine) is relative to the connection's user (`connections.user_id`): `partner` is the other household member's account, so in a household-wide import under one user's connection the other member's accounts are tagged `partner`. Showing "Mine / Partner" for whoever is viewing is done in queries. `balance` is NULL until the first sync |
 | `raw_transactions` | provider, provider_txn_id, payload (JSON), fetched_at | Unmodified provider data |
 | `transactions` | id, account_id, date, amount, merchant_raw, merchant_id, category_id, is_transfer, notes | Unique on (provider, provider_txn_id) |
 | `transaction_splits` | transaction_id, category_id, amount | Splits sum to the parent amount |
