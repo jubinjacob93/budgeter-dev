@@ -42,9 +42,7 @@ class Account(Base):
     # As the provider reports it; NULL until the first sync.
     balance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     currency: Mapped[str] = mapped_column(CHAR(3), server_default="USD")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     connection: Mapped["Connection"] = relationship(back_populates="accounts")
 
