@@ -92,8 +92,8 @@ def test_import_does_not_create_engine():
     assert result.returncode == 0, result.stderr
 
 
-def test_base_metadata_has_naming_convention_and_no_tables():
+def test_base_metadata_has_naming_convention_and_model_tables():
     convention = Base.metadata.naming_convention
 
     assert {"ix", "uq", "ck", "fk", "pk"} <= convention.keys()
-    assert Base.metadata.tables == {}
+    assert set(Base.metadata.tables) == {"users", "connections", "accounts"}

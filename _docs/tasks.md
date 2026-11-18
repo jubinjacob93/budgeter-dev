@@ -26,7 +26,7 @@ Goal: The app connects to Postgres through SQLAlchemy and manages the schema wit
 Depends on: 2
 Description: Add a database module that builds a SQLAlchemy 2.0 engine and session from environment variables. Initialize Alembic with an initial migration that enables the `vector` extension, and add a CI step that runs all migrations against a fresh Postgres service container.
 
-## 4. Create the users, connections and accounts tables (M1)
+## 4. Create the users, connections and accounts tables (M1) ✅
 Goal: The core ownership tables exist as models with a migration.
 Depends on: 3
 Description: Model `users`, `connections` and `accounts` as described in the plan's data model, including `owner_tag` (Mine / Partner / Joint). Generate and apply the migration, and add tests that insert and read back sample rows.
