@@ -119,6 +119,69 @@ Depends on: 3
 - **Stale image gotcha**: `make migrate` runs `docker compose run --rm api`, which uses the existing image. The image copies `migrations/` at build time, so with an image built before this task, `make migrate` exits 0 but stays at `0001`. Run `docker compose build api` (or `make run`, which builds) first. I left the Makefile alone because it's outside this task's files. A `--build` flag there may be worth a follow-up.
 - **Not done by me**: the CI run for the pushed commit. That needs the human push.
 
-## QA verdict
+## QA verdict: PASS
 
-(QA adds its PASS or FAIL verdict here.)
+Tested `task-04` at `d5ba02d` (same as `origin/task-04`) in a fresh clone in a scratch folder. Docker checks ran in Compose project `budgeterqa` on ports 55432/58000 with a throwaway `.env`. The developer's `budgeter-dev` containers and volume were not touched.
+
+### Decisions this task records
+- [x] `owner_tag` is relative to the connection's user; plan § 6 rows updated with the meaning and the new columns - PASS
+      The plan diff changes only the `users`, `connections` and `accounts` rows. The `accounts` note explains `partner` in household-wide imports and leaves the per-viewer view to queries
+- [x] Every account has a connection; seed/CSV/Monarch have their own `provider` and no token; `accounts.connection_id` is `NOT NULL` - PASS
+      `information_schema`: `connection_id` is `NO` nullable. `Provider` includes `seed`, `csv`, `monarch`, and `encrypted_token` is nullable
+
+### Models
+- [x] SQLAlchemy 2.0 style, one module per table, enums in `enums.py`, `__init__` re-exports all eight names - PASS
+- [x] Enums are `StrEnum` with the listed lowercase values - PASS (read the code; unit test `test_enum_values`)
+- [x] Enum columns are VARCHAR with a named CHECK; no native ENUM; DB stores values - PASS
+      DB has `character varying` columns with `ck_connections_provider`, `ck_connections_status`, `ck_accounts_type` and `ck_accounts_owner_tag` listing the lowercase values. `pg_type` has no enum types. The raw-SQL test reads back `credit_card`/`joint`/`plaid`/`active`
+- [x] Relationships with `back_populates`, no ORM delete cascade - PASS (code + `test_relationships_back_populate_without_delete_cascade`)
+
+### `users`
+- [x] Columns match (identity PK, `varchar(320)` NOT NULL, `varchar(255)` NOT NULL, `timestamptz` default `now()`) - PASS (checked in `information_schema` on the QA DB)
+- [x] `CHECK (email = lower(email))` + `uq_users_email`; upper-case and duplicate both rejected - PASS (`pg_constraint`; integration tests)
+- [x] No user limit enforced - PASS (no such constraint or trigger)
+
+### `connections`
+- [x] Columns match (FK `ON DELETE RESTRICT`, indexed `ix_connections_user_id`, `bytea` nullable, `status` default `active`, `created_at`) - PASS
+- [x] `encrypted_token` nullable; only fake bytes `b"not-a-real-token"` used - PASS
+- [x] `repr(Connection)` omits the token - PASS (code + unit test with token set)
+- [x] Several connections per user, same provider allowed - PASS (there's no unique constraint on `user_id`/`provider`; the test creates two Plaid connections for one user)
+
+### `accounts`
+- [x] Columns match (`numeric(14,2)` nullable, `char(3)` default `USD`, `owner_tag` default `mine`, FK RESTRICT, indexed) - PASS
+- [x] `UNIQUE (connection_id, provider_account_id)`; same id on another connection allowed - PASS
+- [x] `balance` NULL and `Decimal("-1234.56")` round-trip exactly - PASS
+- [x] Defaults `mine` / `USD` applied by the DB - PASS
+
+### Constraint names
+- [x] Every PK/FK/UQ/CK/index has a convention name; a unit test finds no `None` names - PASS
+      All 12 constraints and 7 indexes in the DB have names. The composite unique is named `uq_accounts_connection_id`, because the `uq` convention uses only the first column. That matches the convention as the criterion asks, but task 9 should know the name
+
+### Migration `0002`
+- [x] File, `revision = "0002"`, `down_revision = "0001"`, `op`/`sa` imports present - PASS
+- [x] Upgrade creates the schema above; downgrade drops in reverse order and keeps `vector` - PASS
+- [x] Fresh DB: `upgrade head` exit 0, `current` = `0002 (head)`, `downgrade 0001` exit 0 leaving only `alembic_version` and no enum types, `upgrade head` exit 0, `check` exit 0 ("No new upgrade operations detected") - PASS
+- [x] DB at `0001`: `make migrate` exit 0 and moves to `0002 (head)`; a marker table created beforehand was untouched and `vector` stayed - PASS
+      Ran with a freshly built `budgeterqa-api` image. The stale-image gotcha in the implementation notes is real but outside this task's files
+- [x] CI `Migrate` sequence (upgrade, downgrade base, upgrade, check) exits 0 locally; `.github/workflows/ci.yml` unchanged on the branch - PASS
+
+### Tests
+- [x] Unit tests cover metadata columns, enum values, constraint names, `repr` - PASS
+- [x] Integration tests are marked, skip with a visible reason, migrate to head in a session fixture, roll back per test with `create_savepoint` - PASS
+      With one pre-existing user inserted, `select count(*) from users` was 1 before and 1 after `make test`. `connections` and `accounts` were 0 after
+- [x] Each listed integration scenario has its own test - PASS (all 10 scenarios present in `tests/integration/test_models_db.py`)
+- [x] Fresh clone without DB: `make test` exit 0 (45 passed, 24 skipped with reason), `make lint` exit 0. With QA stack + `.env` exported: `make test` 69 passed, 0 skipped - PASS
+- [x] CI run for `d5ba02d` is green (runs 44016033137 and 44016007045); job log shows `69 passed`, none skipped - PASS
+
+### Other checks
+- No secrets, real tokens, real emails or financial data in the diff. Only `example.com` emails and `not-a-real-*` placeholders. No `.env` or data files are tracked
+- Changed files are all within the task's allowed list. No new dependencies
+- Gaps the tests leave open (none required by the criteria): the defaults test inserts via raw SQL only, not an ORM insert without `owner_tag`/`currency` (the model has no Python-side default, so the DB default applies either way). No test inserts a `currency` longer than 3 characters
+
+Tests: `make test` (no DB) 45 passed, 24 skipped, 0 failed; `make test` (QA DB, `.env` exported) 69 passed, 0 failed; `make lint` clean
+
+### Cleanup
+- `docker compose -p budgeterqa down -v --rmi local` removed container `budgeterqa-db-1`, volume `budgeterqa_db-data` and network `budgeterqa_default`
+- It did not remove the image, so `docker rmi budgeterqa-api:latest` removed the QA-built image by exact name
+- Deleted the scratch clone `qa-task-04` (origin `github.com/jubinjacob93/budgeter-dev`) from the session scratchpad
+- Not touched: `budgeter-dev-api-1`, `budgeter-dev-db-1`, volume `budgeter-dev_db-data`, images `budgeter-dev-api:latest` and `budgeter-api-test:latest`
