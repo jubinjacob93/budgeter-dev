@@ -34,7 +34,7 @@ Description: Model `users`, `connections` and `accounts` as described in the pla
 ## 5. Create the transaction and category tables (M1)
 Goal: Tables for raw data, transactions, splits, merchants and categories exist with a migration.
 Depends on: 4
-Description: Model `raw_transactions`, `transactions`, `transaction_splits`, `merchants`, `categories` and `category_rules` per the plan's data model. Include a unique constraint on (provider, provider_txn_id) and a pgvector column on `merchants`; test the unique constraint.
+Description: Model `raw_transactions`, `transactions`, `transaction_splits`, `merchants`, `categories` and `category_rules` per the plan's data model. Include a unique constraint on (provider, provider_txn_id) and test it. The pgvector `embedding` column on `merchants` is added in task 28, once the embedding model and its vector size are chosen.
 
 ## 6. Generate seed data: accounts, transactions and holdings (M1)
 Goal: One command fills the database with a realistic fake household.
@@ -149,7 +149,7 @@ Description: Compare 2–3 embedding options (per the plan's open decisions) and
 ## 28. Add fuzzy merchant search (M4)
 Goal: A search for "walmart" finds every variant of that merchant.
 Depends on: 12, 27
-Description: Embed normalized merchant names into the pgvector column and implement similarity search with a relevance threshold. Test that seed variants match and unrelated merchants do not.
+Description: Add a pgvector `embedding` column to `merchants` with a migration, sized for the model chosen in task 27 and indexed for similarity search (adding the `pgvector` Python package needs approval first). Embed normalized merchant names into it and implement similarity search with a relevance threshold. Test that seed variants match and unrelated merchants do not.
 
 ## 29. Suggest categories with an LLM and retrieval (M4)
 Goal: Transactions no rule matches get a category suggestion grounded in past examples.
