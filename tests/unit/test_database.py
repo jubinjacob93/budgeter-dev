@@ -96,4 +96,14 @@ def test_base_metadata_has_naming_convention_and_model_tables():
     convention = Base.metadata.naming_convention
 
     assert {"ix", "uq", "ck", "fk", "pk"} <= convention.keys()
-    assert set(Base.metadata.tables) == {"users", "connections", "accounts"}
+    assert set(Base.metadata.tables) == {
+        "users",
+        "connections",
+        "accounts",
+        "raw_transactions",
+        "transactions",
+        "transaction_splits",
+        "merchants",
+        "categories",
+        "category_rules",
+    }

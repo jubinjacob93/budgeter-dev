@@ -25,14 +25,28 @@ def reset_settings_and_engine():
     get_engine.cache_clear()
 
 
-def count_users(engine):
+# Tables whose row counts must be the same before and after the test run.
+CHECKED_TABLES = (
+    "users",
+    "transactions",
+    "raw_transactions",
+    "merchants",
+    "categories",
+    "category_rules",
+)
+
+
+def count_rows(engine):
     with engine.connect() as conn:
-        return conn.execute(text("select count(*) from users")).scalar_one()
+        return {
+            table: conn.execute(text(f"select count(*) from {table}")).scalar_one()
+            for table in CHECKED_TABLES
+        }
 
 
 @pytest.fixture(scope="session")
 def migrated_engine():
-    """An engine for a database upgraded to head; checks that tests left no users behind."""
+    """An engine for a database upgraded to head; checks that tests left no rows behind."""
     command.upgrade(Config(str(ALEMBIC_INI)), "head")
     # Alembic's env.py used the cached app engine; drop it so tests start clean.
     get_engine().dispose()
@@ -40,11 +54,11 @@ def migrated_engine():
     get_settings.cache_clear()
 
     engine = build_engine(os.environ["DATABASE_URL"])
-    users_before = count_users(engine)
+    rows_before = count_rows(engine)
     yield engine
-    users_after = count_users(engine)
+    rows_after = count_rows(engine)
     engine.dispose()
-    assert users_after == users_before, "integration tests left rows in users"
+    assert rows_after == rows_before, "integration tests left rows behind"
 
 
 @pytest.fixture
