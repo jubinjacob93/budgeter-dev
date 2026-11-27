@@ -31,7 +31,7 @@ Goal: The core ownership tables exist as models with a migration.
 Depends on: 3
 Description: Model `users`, `connections` and `accounts` as described in the plan's data model, including `owner_tag` (Mine / Partner / Joint). Generate and apply the migration, and add tests that insert and read back sample rows.
 
-## 5. Create the transaction and category tables (M1)
+## 5. Create the transaction and category tables (M1) ✅
 Goal: Tables for raw data, transactions, splits, merchants and categories exist with a migration.
 Depends on: 4
 Description: Model `raw_transactions`, `transactions`, `transaction_splits`, `merchants`, `categories` and `category_rules` per the plan's data model. Include a unique constraint on (provider, provider_txn_id) and test it. The pgvector `embedding` column on `merchants` is added in task 28, once the embedding model and its vector size are chosen.

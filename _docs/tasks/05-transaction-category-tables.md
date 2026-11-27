@@ -181,6 +181,57 @@ Depends on: 4
   - Under the installed SQLAlchemy, assigning `rule.category = category` does not cascade the rule into the session through the backref, so tests `session.add()` new objects explicitly.
   - CI has not run yet; the human pushes.
 
-## QA verdict
+## QA verdict: PASS
 
-(QA adds its PASS or FAIL verdict here.)
+Tested `task-05` at `b260821` (same as `origin/task-05`) in a fresh clone, with Docker in Compose project `budgeterqa` (ports 5433/8001). The developer's stack, `budgeter-dev_db-data` and the dev DB were not touched.
+
+### Decisions this task records
+- [x] Amount sign: both `amount` columns are `numeric(14,2)` in the live DB, and the convention is documented on `Transaction` and in plan § 6 - PASS
+- [x] Deduplication key: `provider` (`Provider`, CHECK) and `provider_txn_id` are on `transactions`, and `uq_transactions_provider` / `uq_raw_transactions_provider` are `UNIQUE (provider, provider_txn_id)` in the live DB - PASS
+- [x] Plan § 6: only the six rows changed. They list the new columns, the sign convention, `group_name`, and the `embedding` column moving to task 28 - PASS
+
+### Models
+- [x] One module per table, 2.0 style, all six re-exported from `models/__init__.py` - PASS
+- [x] `provider` uses `string_enum`. In the DB it is VARCHAR(9) with `ck_transactions_provider` / `ck_raw_transactions_provider`, and `pg_type` has no enum types - PASS
+- [x] All six relationships use `back_populates` (`TransactionSplit.category` is one-way), with no cascade. `account.py` changed only for `transactions` - PASS
+- [x] Explicit `__repr__` on every model. `payload` and `notes` are left out, and unit tests check both - PASS
+
+### Tables (checked against `information_schema` / `pg_constraint` / `pg_indexes` after the migration)
+- [x] `raw_transactions`: columns, types, NOT NULL and `now()` default match. The FK to connections is RESTRICT and indexed. Unique on the pair, and a different provider is allowed. A nested payload round-trips (integration test) - PASS
+- [x] `transactions`: all 12 columns match (VARCHAR 255/500, DATE, NUMERIC(14,2), nullable merchant/category, `is_transfer` default `false`, nullable `notes`, timestamptz `now()`). The three FKs are RESTRICT and indexed, and `date` is indexed. Unique, NULL merchant/category, Decimal round-trip and `is_transfer` default are covered by passing tests - PASS
+- [x] `transaction_splits`: columns and RESTRICT FKs are indexed. Several splits, including two with the same category, are allowed - PASS
+- [x] `merchants`: `normalized_name` VARCHAR(255) is unique and case-sensitive. There is no `embedding` column, and `pgvector` is in neither `pyproject.toml` nor `uv.lock` - PASS
+- [x] `categories`: `name` is unique, `group_name` is not unique, and plan § 6 uses `group_name` - PASS
+- [x] `category_rules`: `pattern` is unique, the FK is RESTRICT and indexed, and several patterns per category are allowed - PASS
+
+### Constraint names
+- [x] Every PK/FK/UQ/CK/index in the live DB follows the convention, including `uq_transactions_provider` and `uq_raw_transactions_provider`. `test_every_constraint_and_index_has_a_convention_name` covers all nine tables - PASS
+
+### Migration `0003`
+- [x] File name, `revision = "0003"`, `down_revision = "0002"` - PASS
+- [x] Create order is categories → merchants → category_rules → raw_transactions → transactions → transaction_splits, and downgrade reverses it - PASS
+- [x] Fresh DB (`budgeter_qa_fresh`): `upgrade head` 0, `current` = `0003 (head)` 0, `downgrade 0002` 0 (left `accounts, alembic_version, connections, users`; `vector` still installed), `upgrade head` 0, `check` 0 ("No new upgrade operations detected") - PASS
+- [x] Existing DB at `0002`: I built the api image from `main` (`224818a`, migrations up to 0002) and migrated to `0002 (head)`. Then I inserted 2 made-up users, 2 connections and 3 accounts and saved per-table count + md5 of all rows. I checked out `task-05`, ran `docker compose -p budgeterqa build api` and `COMPOSE_PROJECT_NAME=budgeterqa make migrate`: exit 0, "Running upgrade 0002 -> 0003", `current` = `0003 (head)`. Counts and md5s were identical before and after (users 2, connections 2, accounts 3) - PASS
+- [x] CI `Migrate` sequence (`downgrade base`, `upgrade head`, `check`) passes locally, and the `Migrate` step is green in CI - PASS
+
+### Tests
+- [x] Unit tests cover the nine tables' columns, types, nullability, defaults, the missing `embedding`, convention names and reprs. `test_database.py` lists nine tables - PASS
+- [x] Integration tests use `migrated_engine` / `db_session` (`create_savepoint`) and `begin_nested()` for failures. The session-end check now counts `users`, `transactions`, `raw_transactions`, `merchants`, `categories` and `category_rules` - PASS
+- [x] Each listed integration case is its own test or parametrized set in `test_transactions_db.py` (33 tests, all pass) - PASS
+- [x] Fresh clone without a DB: `make lint` exit 0, and `make test` exit 0 with 101 passed, 57 skipped ("DATABASE_URL is not set; start the stack and export DATABASE_URL from .env"). With the QA stack running, migrated and `.env` exported: `make test` exit 0, 158 passed. Every row count was 0 afterwards - PASS
+- [x] CI for `b260821` is green (push run 45759571038, PR run 45759615032). The Test step shows 158 passed and none skipped, so the integration tests ran - PASS
+
+Tests: `make test` (no DB) 101 passed, 57 skipped. `make test` (QA stack, empty migrated DB) 158 passed, 0 failed. `make lint` clean.
+
+Secrets: the task-05 diff has no keys, tokens, passwords or real-looking bank data. Fixtures are made up (`t05@example.com`, `SQ *TEST CAFE #001`, `{"fake": true}`). No `.env`, `.pem` or `.key` files are tracked.
+
+### Observations (not blocking; no criterion fails)
+- **Task-04 test assumes an empty `accounts` table.** I ran `make test` against the QA DB while it still held my made-up 0002 rows. `tests/integration/test_models_db.py::test_query_by_owner_tag_across_two_users` failed: `['a-mine', 'b-mine', 'qa-acc-1'] != ['a-mine', 'b-mine']`. The test filters only by `owner_tag`, so any existing `mine` account breaks it. Task 05 did not change this file, and it passes on an empty DB. It will fail on a dev DB that holds data, for example after task 6 seeds one.
+- The `migrated_engine` leftover check doesn't count `transaction_splits`, `accounts` or `connections`. The criterion doesn't ask for them. A leftover split would need a leftover transaction, which is counted.
+- The "downgrade leaves `vector` and the task-4 tables" behaviour is checked by hand here, not by an automated test.
+
+### Cleanup
+- `docker compose -p budgeterqa down -v --rmi local` (run from the clone) removed container `budgeterqa-db-1`, volume `budgeterqa_db-data` (this held the made-up 0002 rows and the `budgeter_qa_fresh` database) and network `budgeterqa_default`
+- `--rmi local` left `budgeterqa-api:latest` in place, so I removed it by exact name with `docker image rm budgeterqa-api:latest`
+- Deleted the scratch clone `/tmp/claude-1000/-home-vjubin-projects-budgeter-dev/f4adc3fc-6a5c-46c2-81ca-9ada19cbcde8/scratchpad/qa-task05` (origin `jubinjacob93/budgeter-dev`, branch `task-05`) and QA's snapshot files
+- Not touched: `budgeter-dev-api-1`, `budgeter-dev-db-1`, volume `budgeter-dev_db-data`, image `budgeter-dev-api`
