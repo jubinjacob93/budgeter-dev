@@ -19,6 +19,7 @@ from budgeter.core.models.enums import AccountType, OwnerTag, string_enum
 
 if TYPE_CHECKING:
     from budgeter.core.models.connection import Connection
+    from budgeter.core.models.transaction import Transaction
 
 
 class Account(Base):
@@ -45,6 +46,7 @@ class Account(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     connection: Mapped["Connection"] = relationship(back_populates="accounts")
+    transactions: Mapped[list["Transaction"]] = relationship(back_populates="account")
 
     def __repr__(self) -> str:
         return (

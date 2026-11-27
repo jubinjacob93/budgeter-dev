@@ -234,11 +234,12 @@ Provider data is stored raw, then normalized into application tables. Raw payloa
 | `users` | id, email, password_hash, created_at | 1–2 per household. `email` is unique and stored lower-case (checked by the database) |
 | `connections` | id, user_id, provider, encrypted_token, status, created_at | One per institution login, or one per seed / CSV / Monarch import (`provider` `seed` / `csv` / `monarch`, no token). `provider`: seed / csv / monarch / plaid / simplefin; `status`: active / login_required / error / disconnected |
 | `accounts` | id, connection_id, provider_account_id, name, type, owner_tag, balance, currency, created_at | Every account has a connection. Unique on (connection_id, provider_account_id). `owner_tag` (mine / partner / joint, default mine) is relative to the connection's user (`connections.user_id`): `partner` is the other household member's account, so in a household-wide import under one user's connection the other member's accounts are tagged `partner`. Showing "Mine / Partner" for whoever is viewing is done in queries. `balance` is NULL until the first sync |
-| `raw_transactions` | provider, provider_txn_id, payload (JSON), fetched_at | Unmodified provider data |
-| `transactions` | id, account_id, date, amount, merchant_raw, merchant_id, category_id, is_transfer, notes | Unique on (provider, provider_txn_id) |
-| `transaction_splits` | transaction_id, category_id, amount | Splits sum to the parent amount |
-| `merchants` | id, normalized_name, embedding | pgvector column for fuzzy search |
-| `categories`, `category_rules` | name, group; pattern → category | Rules evaluated before the LLM |
+| `raw_transactions` | id, connection_id, provider, provider_txn_id, payload (JSONB), fetched_at | Unmodified provider data. `connection_id` records which login it came from, so a sync can be replayed. Unique on (provider, provider_txn_id), so re-importing the same payload updates it |
+| `transactions` | id, account_id, provider, provider_txn_id, date, amount, merchant_raw, merchant_id, category_id, is_transfer, notes, created_at | Unique on (provider, provider_txn_id); `provider` is copied from the account's connection. `amount` is signed `NUMERIC(14, 2)`: negative means money leaves the account (purchases, fees, payments out), positive means money comes in (income, refunds, transfers in); every provider converts to this. `merchant_raw` is the provider's description as received. `merchant_id` and `category_id` are nullable; no category means uncategorized. `is_transfer` defaults to false |
+| `transaction_splits` | id, transaction_id, category_id, amount | Same sign as the parent transaction. Splits sum to the parent amount (checked from task 49, not by the database) |
+| `merchants` | id, normalized_name, created_at | `normalized_name` is unique and case-sensitive. The pgvector `embedding` column for fuzzy search is added in task 28 |
+| `categories` | id, name, group_name, created_at | `name` is unique. `group_name` is the category group (not `group`, a reserved word in SQL) |
+| `category_rules` | id, pattern, category_id, created_at | Pattern → category, evaluated before the LLM. `pattern` is unique |
 | `review_queue` | transaction_id, suggested_category, confidence, status | LLM suggestions awaiting approval |
 | `budgets` | category_id, month, type, planned_amount | Type: fixed / flexible / non-monthly |
 | `holdings` | account_id, ticker, shares, as_of | From the provider or entered manually |
